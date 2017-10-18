@@ -1,0 +1,69 @@
+---
+title: "Basics and CART"
+output: html_notebook
+---
+
+This notebook contains code from 1-basics-cart.R and the corresponding output.
+
+## Some data exploration
+
+After all packages and data have been loaded and set up (see 1-basics-cart.R), we might want to explore the training set using graphs. Here is a nice plot using `ggpairs` from the `GGally` package.
+
+```{r, results="hide", fig.align="center"}
+ggpairs(bremen_train_c[,c(2:4,10)], lower = list(continuous = "smooth"))
+```
+
+## Grow and prune tree
+
+Our task is to predict rent using $m^2$, rooms, location, city and distance to city center as features. In order to grow a regression tree, `rpart` is used here, which follows the CART idea. 
+
+```{r}
+set.seed(733)
+f_tree <- rpart(rent ~ m2 + rooms + lon + lat + city + distance, data = bremen_train_c, cp = 0.005)
+printcp(f_tree)
+```
+
+Given the grown tree, `printcp` and `plotcp` help us to determine the best subtree, whereas `Root node error` times `xerror` gives us the estimated test error for each subtree based on cross-validation. 
+
+```{r, fig.align="center"}
+plotcp(f_tree)
+```
+
+We can get the best subtree with the `prune` function, here using the one standard error rule.
+
+```{r}
+mincp <- f_tree$cptable[which.min(f_tree$cptable[,"xerror"]),"CP"]
+minse <- f_tree$cptable[which.min(f_tree$cptable[,"xerror"]),"xstd"]
+p_tree <- prune(f_tree, cp = mincp + minse)
+```
+
+## Plots
+
+An advantage of trees is that they can be easily interpreted by a simple plot. The `party` package produces nice tree plots.
+
+```{r, fig.align="center"}
+prty_tree <- as.party(p_tree)
+plot(prty_tree, gp = gpar(fontsize = 8))
+```
+
+If we are interested in the prediction surface of the tree, partial dependence and ICE plots using e.g. the `pdp` package can be useful.
+
+```{r, fig.align="center"}
+pdp1 <- partial(p_tree, pred.var = "m2", ice = T)
+plotPartial(pdp1, rug = T, train = bremen_train, alpha = 0.3)
+```
+
+```{r, fig.align="center"}
+pdp2 <- partial(p_tree, pred.var = c("lat", "lon"))
+plotPartial(pdp2, levelplot = F, drape = T, colorkey = F, screen = list(z = 30, x = -60))
+```
+
+## Prediction
+
+Finally, we can use the pruned tree in order to predict the outcome in the holdout (test) set. Then, `postResample` produces basic performance measures.
+
+```{r}
+y_tree <- predict(p_tree, newdata = bremen_test)
+postResample(pred = y_tree, obs = bremen_test$rent)
+```
+

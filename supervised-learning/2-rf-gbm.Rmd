@@ -1,0 +1,141 @@
+---
+title: "Random Forests and Boosting"
+output: html_notebook
+---
+
+This notebook contains some code from 2-rf-gbm.R and the corresponding output.
+
+## Random Forest
+
+Again, all packages and data have to be set up first (see 2-rf-gbm.R). Then, we use `train` from the `caret` package for training a couple of prediction models. For this, we first specify our evaluation method and a set of tryout values for the tuning parameters of the first method (i.e. random forest).
+
+```{r}
+ctrl  <- trainControl(method = "cv",
+                      number = 10)
+
+grid <- expand.grid(mtry = 1:6)
+```
+
+This can be passed on to `train`, along with the specification of the model and the method.
+
+```{r}
+set.seed(231)
+rf <- train(rent ~ m2 + rooms + lon + lat + city + distance,
+            data = bremen_train_c,
+            method = "rf",
+            trControl = ctrl,
+            tuneGrid = grid,
+            importance = TRUE)
+```
+
+The results of the tuning process can be inspected by simply calling the corresponding object.
+
+```{r}
+rf
+```
+
+Especially for ensemble methods, plots can be useful in order to see how the features are related to the outcome according to the fitted model. Again, this can be done separately by predictor... 
+
+```{r, fig.align="center"}
+pdp3 <- partial(rf, pred.var = "m2", ice = T, trim.outliers = T)
+pdp4 <- partial(rf, pred.var = "distance", ice = T, trim.outliers = T)
+p1 <- plotPartial(pdp3, rug = T, train = bremen_train_c, alpha = 0.3)
+p2 <- plotPartial(pdp4, rug = T, train = bremen_train_c, alpha = 0.3)
+grid.arrange(p1, p2, ncol = 2)
+```
+
+...and also by considering multiple predictors jointly.
+
+```{r, fig.align="center"}
+pdp5 <- partial(rf, pred.var = c("lat", "lon"))
+plotPartial(pdp5, levelplot = F, drape = T, colorkey = F, screen = list(z = 30, x = -60))
+```
+
+## Boosting
+
+For Gradient Boosting, we have to take care of a couple of tuning parameters. Here, we build a grid with all combinations of a set of tryout values.
+
+```{r}
+grid <- expand.grid(interaction.depth = 1:6, 
+                    n.trees = c(500, 1000, 1500), 
+                    shrinkage = c(0.01, 0.005),
+                    n.minobsinnode = 10)
+```
+ 
+Again, this is passed on to `train`, now using `gbm` instead of `rf`.
+
+```{r}
+set.seed(231)
+bm <- train(rent ~ m2 + rooms + lon + lat + city + distance,
+            data = bremen_train_c,
+            method = "gbm",
+            trControl = ctrl,
+            tuneGrid = grid)
+```
+
+Instead of just printing the results from the tuning process, we can also plot them.
+
+```{r, fig.align="center"}
+plot(bm)
+```
+
+## CART
+
+Adding a single tree for comparison...
+
+```{r}
+grid <- expand.grid(maxdepth = 1:30)
+                    
+set.seed(231)
+cart <- train(rent ~ m2 + rooms + lon + lat + city + distance,
+              data = bremen_train_c,
+              method = "rpart2",
+              trControl = ctrl,
+              tuneGrid = grid)
+```
+
+## Linear regression
+
+...and also a linear regression model.
+
+```{r}
+set.seed(231)
+reg <- train(rent ~ m2 + rooms + lon + lat + city + distance,
+            data = bremen_train_c,
+            method = "glm",
+            trControl = ctrl)
+```
+
+## Comparison
+
+Now, we can use `resamples` to gather the cross-validation results from all models.
+
+```{r}
+resamps <- resamples(list(RandomForest = rf,
+                          Boosting = bm,
+                          CART = cart,
+                          Regression = reg))
+```
+
+This object can now be used for comparing these models with respect to their performance, based on CV in the training set.
+
+```{r, fig.align="center"}
+bwplot(resamps, metric = c("RMSE", "Rsquared"), scales = list(relation = "free"), xlim = list(c(0, 350), c(0, 1)))
+
+```
+
+## Prediction
+
+Finally, we can predict the outcome in the test data and evaluate the models based on their test set performance.
+
+```{r}
+y_rf <- predict(rf, newdata = bremen_test_c)
+y_bm <- predict(bm, newdata = bremen_test_c)
+y_cart <- predict(cart, newdata = bremen_test_c)
+y_reg <- predict(reg, newdata = bremen_test_c)
+
+postResample(pred = y_rf, obs = bremen_test_c$rent)
+postResample(pred = y_bm, obs = bremen_test_c$rent)
+postResample(pred = y_cart, obs = bremen_test_c$rent)
+postResample(pred = y_reg, obs = bremen_test_c$rent)
+```
