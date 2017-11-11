@@ -32,9 +32,11 @@ plotcp(f_tree)
 We can get the best subtree with the `prune` function, here using the one standard error rule.
 
 ```{r}
-mincp <- f_tree$cptable[which.min(f_tree$cptable[,"xerror"]),"CP"]
-minse <- f_tree$cptable[which.min(f_tree$cptable[,"xerror"]),"xstd"]
-p_tree <- prune(f_tree, cp = mincp + minse)
+minx <- which.min(f_tree$cptable[,"xerror"])
+minxse <- f_tree$cptable[minx,"xerror"] + f_tree$cptable[minx,"xstd"]
+minse <- which.min(abs(f_tree$cptable[,"xerror"] - minxse))
+mincp <- f_tree$cptable[minse,"CP"]
+p_tree <- prune(f_tree, cp = mincp)
 ```
 
 ## Plots
@@ -43,13 +45,13 @@ An advantage of trees is that they can be easily interpreted by a simple plot. T
 
 ```{r, fig.align="center"}
 prty_tree <- as.party(p_tree)
-plot(prty_tree, gp = gpar(fontsize = 8))
+plot(prty_tree, gp = gpar(fontsize = 6))
 ```
 
-If we are interested in the prediction surface of the tree, partial dependence and ICE plots using e.g. the `pdp` package can be useful.
+If we are interested in the prediction surface of the tree, partial dependence plots using e.g. the `pdp` package can be useful.
 
 ```{r, fig.align="center"}
-pdp1 <- partial(p_tree, pred.var = "m2", ice = T)
+pdp1 <- partial(p_tree, pred.var = "m2")
 plotPartial(pdp1, rug = T, train = bremen_train, alpha = 0.3)
 ```
 

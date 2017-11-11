@@ -54,19 +54,22 @@ f_tree
 printcp(f_tree)
 plotcp(f_tree)
 
-mincp <- f_tree$cptable[which.min(f_tree$cptable[,"xerror"]),"CP"]
-minse <- f_tree$cptable[which.min(f_tree$cptable[,"xerror"]),"xstd"]
-p_tree <- prune(f_tree, cp = mincp + minse)
+minx <- which.min(f_tree$cptable[,"xerror"])
+minxse <- f_tree$cptable[minx,"xerror"] + f_tree$cptable[minx,"xstd"]
+minse <- which.min(abs(f_tree$cptable[,"xerror"] - minxse))
+mincp <- f_tree$cptable[minse,"CP"]
+
+p_tree <- prune(f_tree, cp = mincp)
 p_tree
 
 # Variable Importance and Plots
 
 prty_tree <- as.party(p_tree)
-plot(prty_tree, gp = gpar(fontsize = 8))
+plot(prty_tree, gp = gpar(fontsize = 6))
 
 varImp(p_tree)
 
-pdp1 <- partial(p_tree, pred.var = "m2", ice = T)
+pdp1 <- partial(p_tree, pred.var = "m2")
 plotPartial(pdp1, rug = T, train = bremen_train, alpha = 0.3)
 
 pdp2 <- partial(p_tree, pred.var = c("lat", "lon"))
